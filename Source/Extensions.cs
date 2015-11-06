@@ -39,6 +39,7 @@
 // http://www.opensource.org/licenses/bsd-license.php]
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
@@ -85,28 +86,67 @@ namespace Moq
 			var genericParameters = invocation.Method.IsGenericMethod
 				? "<" + string.Join(", ", invocation.Method.GetGenericArguments().Select(t => t.Name).ToArray()) + ">"
 				: "";
+		    var lastParameter = invocation.Method.GetParameters().LastOrDefault();
 
-			return invocation.Method.DeclaringType.Name + "." + invocation.Method.Name + genericParameters + "(" +
-				string.Join(", ", invocation.Arguments.Select(a => GetValue(a)).ToArray()) + ")";
+		    var arguments = GetArguments(invocation, lastParameter);
+
+		    return invocation.Method.DeclaringType.Name + "." + invocation.Method.Name + genericParameters + "(" +
+				string.Join(", ", arguments.ToArray()) + ")";
 		}
 
-		public static string GetValue(object value)
+	    private static IEnumerable<object> GetArguments(ICallContext invocation, ParameterInfo lastParameter)
+	    {
+	        IEnumerable<object> arguments;
+	        if (lastParameter != null && IsParams(lastParameter))
+	        {
+	            var argumentsButLast = invocation.Arguments.Take(invocation.Arguments.Length - 1).Select(x => GetValue(x));
+	            var paramsArgument = (Array) invocation.Arguments.Last();
+	            arguments = 
+                    paramsArgument.Length == 0
+	                ? argumentsButLast
+	                : argumentsButLast.Concat(new[] {GetValue(paramsArgument, true)});
+	        }
+	        else
+	        {
+	            arguments = invocation.Arguments.Select(x => GetValue(x));
+	        }
+
+	        return arguments;
+	    }
+
+	    static bool IsParams(ParameterInfo param)
+        {
+            return param.GetCustomAttributes(typeof(ParamArrayAttribute), false).Length > 0;
+        }
+
+	    private static string GetValue(object value, bool isParams = false)
 		{
 			if (value == null)
 			{
 				return "null";
 			}
 
-			var typedValue = value as string;
-			if (typedValue != null)
+			var stringValue = value as string;
+			if (stringValue != null)
 			{
-				return "\"" + typedValue + "\"";
+				return "\"" + stringValue + "\"";
 			}
+
+		    var array = value as Array;
+		    if (array != null)
+		    {
+		        if (isParams)
+		        {
+                    return string.Join(", ", array.Cast<object>().Select(x => GetValue(x)));
+                }
+
+                return "[ " + string.Join(", ", array.Cast<object>().Select(x => GetValue(x))) + " ]";
+		    }
 
 			return value.ToString();
 		}
 
-		public static object InvokePreserveStack(this Delegate del, params object[] args)
+	    public static object InvokePreserveStack(this Delegate del, params object[] args)
 		{
 			try
 			{

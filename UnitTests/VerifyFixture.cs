@@ -860,6 +860,28 @@ namespace Moq.Tests
 				mex.Message);
 		}
 
+        [Fact]
+        public void IncludesActualCallsWithExplicitArraysInFailureMessage()
+        {
+            var mock = new Moq.Mock<IFoo>();
+
+            mock.Object.ParamsArray("first", "a", new Object(), null, new object[] { "e", "f" }, "d");
+            mock.Object.Array("first", new object[] { "a", new Object(), null, new object[] { "e", "f" }, "d" });
+            mock.Object.ParamsArray("first");
+            mock.Object.Array("first", null);
+
+            var mex = Assert.Throws<MockException>(() => mock.Verify(f => f.Execute("pong")));
+
+            Assert.Contains(
+                Environment.NewLine +
+                "Performed invocations:" + Environment.NewLine +
+                "IFoo.ParamsArray(\"first\", \"a\", System.Object, null, [ \"e\", \"f\" ], \"d\")" + Environment.NewLine +
+                "IFoo.Array(\"first\", [ \"a\", System.Object, null, [ \"e\", \"f\" ], \"d\" ])" + Environment.NewLine +
+                "IFoo.ParamsArray(\"first\")" + Environment.NewLine +
+                "IFoo.Array(\"first\", null)",
+                mex.Message);
+        }
+ 
 		[Fact]
 		public void IncludesMessageAboutNoActualCallsInFailureMessage()
 		{
@@ -908,7 +930,9 @@ namespace Moq.Tests
 			void EchoRef<T>(ref T value);
 			void EchoOut<T>(out T value);
 			int Echo(int value);
-			void Submit();
+            void ParamsArray(string firstParameter, params object[] value);
+            void Array(string firstParameter, object[] value);
+            void Submit();
 			string Execute(string command);
 		}
 
@@ -929,6 +953,7 @@ namespace Moq.Tests
         {
         }
 	}
+
 }
 
 namespace SomeNamespace
